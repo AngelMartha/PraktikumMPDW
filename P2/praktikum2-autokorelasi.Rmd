@@ -83,7 +83,7 @@ summary(model)
 Model yang dihasilkan adalah $$AQI=3.523+0.474O_3-0.021CO$$ Berdasarkan ringkasan model dapat diketahui bahwa hasil uji F memiliki *p-value* \< $\alpha$ (5%). Artinya, minimal terdapat satu variabel yang berpengaruh nyata terhadap model. Hasil uji-t parsial parameter regresi, yaitu intersep, b1, b2, dan b3 juga menunjukkan hal yang sama, yaitu memiliki *p-value* \< $\alpha$ (5%) sehingga nyata dalam taraf 5%. Selanjutnya dapat dilihat juga nilai $R^2= 0.9467 $. Artinya, sebesar 94.67% keragaman nilai AQI dapat dijelaskan oleh peubah $$O_3 dan CO$$. Hasil ini menunjukkan hasil yang bagus, seolah mendapatkan hasil terbaik. Namun, kita perlu melakukan uji terhadap sisaannya seperti berikut ini.
 
 ```{r}
-#sisaan dan fitted value
+#Sisaan dan fitted value
 sisaan<- residuals(model)
 fitValue<- predict(model)
 
