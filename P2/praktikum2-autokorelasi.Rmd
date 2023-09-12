@@ -23,7 +23,7 @@ library(rio)
 Data yang digunakan dalam kesempatan kali ini adalah data Air Quality New Delhi yang berjumlah 72 baris.
 
 ```{r}
-newdelhi <- read.csv("C:\\Users\\Angel Martha\\Downloads\\NewDelhi_Air_quality (1).csv", sep = ",")
+newdelhi <- import('https://raw.githubusercontent.com/AngelMartha/PraktikumMPDW/main/P2/New%20Delhi%20AQI.csv')
 View (newdelhi)
 ```
 
