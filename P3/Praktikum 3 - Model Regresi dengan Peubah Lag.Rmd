@@ -181,7 +181,7 @@ BIC(model.ardl)
 ```
 
 Hasil di atas menunjukkan bahwa selain peubah $intercept$ dan $Y_{t-1}$, hasil uji t menunjukkan nilai-p pada peubah $\ < 0.05$ Hal ini menunjukkan bahwa peubah $intercept$ dan $Y_{t-1}$ berpengaruh signifikan terhadap $Y_t$, sementara peubah lain tidak berpengaruh signifikan terhadap $Y_t$. 
-Artinya, menurut model DLM dengan q=6, nilai AQI saat ini dipengaruhi oleh kandungan no2 6 hari sebelumnya, dan nilai AQI 1 hari sebelumnya. 
+Artinya, menurut model DLM dengan q=6, nilai AQI saat ini dipengaruhi sebelum adanya pengaruh dari variabel lain dan nilai AQI 1 hari sebelumnya. 
 Adapun modelnya seperti berikut:
 
 $$\hat{Y_t}=7.50289 +56.10218X_t-55.56085X_{t-1}+154.30811X_{t-2}-99.74235X_{t-3}+31.76283X_{t-4}-68.05805X_{t-5}+118.20093 X_{t-6}-43.62567X_{t-7}+96.35911X_{t-8}-84.27036X_{t-9}+98.99513X_{t-10}-77.98739X_{t-11}+50.75518X_{t-12}-81.62733X_{t-13}+89.05841X_{t-14}+0.54721Y_{t-1}+0.21796Y_{t-2}+0.27702Y_{t-3}-0.45572Y_{t-4}-0.09352Y_{t-5}-0.06919Y_{t-6}$$
