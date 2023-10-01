@@ -5,7 +5,6 @@ date: "2023-09-26"
 output: html_document
 ---
 
-### Library
 ```{r}
 library(ggplot2)
 library(tsibble)
