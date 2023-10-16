@@ -21,7 +21,7 @@ library(graphics)
 
 ## Data Asli
 
-Digunakan data Emisi CO2 di Dunia Sektor Industri dalam kurun waktu 1 Juni 2022 sampai 31 Mei 2023
+Digunakan data Harga Saham pada perusahan GOTO selama satu tahun dalam kurun waktu 5 September 2022 sampai 1 September 2023
 
 ```{r}
 library(rio)
@@ -47,7 +47,7 @@ Berdasarkan plot data deret waktu, terlihat bahwa data cenderung memiliki trend 
 ```{r}
 sahamtrain<-stas[1:212]
 train.ts<-sahamtrain
-plot.ts(train.ts, lty=1, xlab="waktu", ylab="Saham", main="Plot Saham Train")
+plot.ts(train.ts, lty=1, xlab="Waktu", ylab="Saham", main="Plot Saham Train")
 ```
 
 Berdasarkan plot data deret waktu pada data latih, terlihat bahwa data cenderung memiliki trend yang naik dan cenderung tidak bergerak pada nilai tengah tertentu. Hal ini mengindikasikan bahwa data tidak stasioner dalam rataan.
@@ -57,7 +57,7 @@ Berdasarkan plot data deret waktu pada data latih, terlihat bahwa data cenderung
 ```{r}
 sahamtest<-stas[213:242]
 test.ts<-ts(sahamtest)
-plot.ts(test.ts, lty=1, xlab="waktu", ylab="Saham", main="Plot Saham Test")
+plot.ts(test.ts, lty=1, xlab="Waktu", ylab="Saham", main="Plot Saham Test")
 ```
 
 ### Uji Stasioneritas Data
@@ -100,7 +100,7 @@ Plot Boxcox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **-0.7
 
 ```{r}
 train.diff<-diff(train.ts,differences = 1) 
-plot.ts(train.diff, lty=1, xlab="waktu", ylab="Data Difference 1 Kurs", main="Plot Difference Kurs")
+plot.ts(train.diff, lty=1, xlab="waktu", ylab="Data Difference 1 Saham", main="Plot Difference Saham")
 ```
 Berdasarkan plot data deret waktu, terlihat bahwa data sudah stasioner dalam rataan ditandai dengan data bergerak pada nilai tengah tertentu (tidak terdapat trend ataupun musiman pada data)
 
