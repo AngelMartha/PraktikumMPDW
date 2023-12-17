@@ -1,0 +1,561 @@
+---
+title: "Project MPDW : Peramalan Saham Unilever Menggunakan Pemodelan ARIMA-GARCH"
+author: "Kelompok 12 - Angel Martha P.P, Aida Darajati, Alfiah Ayu H, Zulfa Hafizoh, Hilmi Awfa A"
+date: "2023-12-27"
+output:
+  rmdformats::readthedown
+---
+
+Data yang kelompok 12 gunakan adalah data persentase saham Unilever di Indonesia 1 Januari 2018 - 30 Oktober 2023.
+
+
+# Library
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(dplyr)
+library(TTR)
+library(forecast)
+library(lmtest)
+library(orcutt)
+library(HoRM)
+library(dLagM)
+library(dynlm)
+library(MLmetrics)
+library(car)
+library(TSA)
+library(aTSA)
+library(rugarch)
+library(imputeTS)
+library(tidyr)
+```
+
+# Impor Data
+```{r}
+#install.packages("rio") #install jika belum ada
+library(rio)
+datasaham <- import("https://raw.githubusercontent.com/aidara11/mpdw/main/Pertemuan%2011/Data%20Saham%20Unilever%202018-2023.csv")
+head(datasaham)
+``` 
+
+## Cek data
+```{r}
+str(datasaham)         #struktur data
+dim(datasaham)         #dimensi data
+sum(is.na(datasaham))  #cek data kosong
+```
+
+Data persentase saham Unilever Indonesia tahun 2018 - 2023 terdiri dari 305 amatan. Peubah yang akan digunakan adalah peubah date dan close. Data saham Unilever sudah berformat numerik dan tidak terdapat data kosong.
+
+## Ubah menjadi time series
+```{r}
+datasaham.ts <- ts(datasaham$Close)
+```
+
+## Plot Data Penuh
+```{r}
+plot.ts(datasaham.ts, lty=1, xlab="Periode", ylab="saham", main="Plot Persentase Saham Unilever di Indonesia tahun 2018-2023")
+```
+
+Berdasarkan plot data deret waktu, terlihat bahwa data cenderung memiliki trend yang turun. Berdasarkan pola data, pembagian data latih dan data uji ditetapkan dengan proporsi 80%:20%.
+
+## Plot Data Latih
+
+```{r}
+sahamtrain <- datasaham.ts[1:244]
+train.ts <- ts(sahamtrain)
+plot.ts(train.ts, lty=1, xlab="Periode", ylab="saham", main="Plot Train Persentase Saham Unilever di Indonesia tahun 2018-2023")
+```
+
+Berdasarkan plot data deret waktu pada data latih, terlihat bahwa data cenderung memiliki trend yang turun dan cenderung tidak bergerak pada nilai tengah tertentu. Hal ini mengindikasikan bahwa data tidak stasioner dalam rataan.
+
+## Plot Data Uji
+```{r}
+sahamtest <- datasaham.ts[245:305]
+test.ts <- ts(sahamtest)
+plot.ts(test.ts, lty=1, xlab="Periode", ylab="saham", main="Plot Test Persentase Saham Unilever di Indonesia tahun 2018-2023")
+```
+
+Berdasarkan plot data deret waktu pada data uji, terlihat bahwa data cenderung memiliki trend yang turun dan cenderung tidak bergerak pada nilai tengah tertentu. Hal ini mengindikasikan bahwa data uji tidak stasioner dalam rataan.
+
+## Cek pola data musiman
+```{r}
+seasonplot(datasaham.ts,12, 
+  main="Saham Unilever Indonesia 01/01/2018 - 30/10/2023", 
+  xlab = "Bulan ke-",
+  ylab = "Close Price",
+  year.labels = TRUE, col=rainbow(18))
+```
+
+Plot data menunjukkan bahwa data tidak berpola musiman.
+
+# Uji Stasioneritas Data
+
+## Plot ACF
+```{r}
+acf(train.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF data train menurun secara perlahan (*tails of slowly*) dan tidak membentuk gelombang sinus. Hal ini juga menjadi indikasi bahwa data tidak stasioner dalam rataan.
+
+## Uji ADF
+```{r}
+tseries::adf.test(train.ts)
+```
+Hipotesis 
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.4543 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa data train tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF, sehingga ketidakstasioneran model kedepannya harus ditangani.
+
+## Plot Box-Cox
+```{r}
+index <- seq(1:244)
+bc = boxcox(train.ts~index, lambda = seq(-2, 4, by=.01))
+
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+Plot Boxcox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **1.88** dan pada selang kepercayaan 95% nilai memiliki batas bawah **1.60** dan batas atas **2.15**. Selang tersebut tidak memuat nilai satu sehingga dapat dikatakan bahwa data train tidak stasioner dalam ragam.
+
+# Penanganan Ketidakstasioneran Data
+
+## Penanganan ketidakstasioneran ragam
+
+### Transformasi Data
+```{r}
+train.ts.new <- (train.ts)^2
+```
+
+### Plot Box-Cox
+```{r}
+index <- seq(1:244)
+bc = boxcox(train.ts.new~index, lambda = seq(-2, 4, by=.01))
+
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+```{r}
+plot.ts(train.ts.new, lty=1, xlab="waktu", ylab="Data Transformasi", main="Plot Transformasi Data")
+```
+Plot Boxcox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **0.94** dan pada selang kepercayaan 95% nilai memiliki batas bawah **0.80** dan batas atas **1.07**. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data train stasioner dalam ragam.
+
+## Penanganan ketidakstasioneran rataan
+```{r}
+train.diff <- diff(train.ts.new, differences = 1) 
+plot.ts(train.diff, lty=1, xlab="Periode", ylab="Data Difference 1 saham", main="Plot Difference Persentase saham di Indonesia tahun 2003-2023")
+```
+Berdasarkan plot data deret waktu, terlihat bahwa data sudah stasioner dalam rataan ditandai dengan data bergerak pada nilai tengah tertentu (tidak terdapat trend ataupun musiman pada data).
+
+# Uji Stasioneritas Ulang
+
+## Plot ACF (rataan)
+```{r}
+acf(train.diff)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot ACF cuts off pada lag ke 1. Hal ini menandakan data sudah stasioner dalam rataan dan ketidakstasioneran data telah berhasil tertangani.
+
+## Uji ADF (rataan)
+```{r}
+tseries::adf.test(train.diff)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$ atau data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF, sehingga dalam hal ini ketidakstasioneran data sudah berhasil ditangani dan dapat dilanjutkan ke pemodelan.
+
+
+# Identifikasi Model
+
+## Plot ACF
+```{r}
+acf(train.diff)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot ACF cenderung *cuts off* pada lag ke 1, sehingga jika plot PACF dianggap *tails of*, maka model tentatifnya adalah ARIMA(0,1,1).
+
+## Plot PACF
+
+```{r}
+pacf(train.diff)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot PACF cenderung *cuts off* pada lag ke 1, sehingga jika plot ACF dianggap *tails of*, maka model tentatifnya adalah ARIMA(1,1,0).
+
+
+## Plot EACF
+```{r}
+eacf(train.diff)
+```
+Identifikasi model menggunakan plot EACF dilakukan dengan melihat ujung segitiga pada pola segitiga nol. Dalam hal ini model tentatif yang terbentuk adalah ARIMA(0,1,0), ARIMA(0,1,1), ARIMA(1,1,1), ARIMA(1,1,2), ARIMA(2,1,2), ARIMA(2,1,3).
+
+# Pendugaan Parameter Model Tentatif
+
+## ARIMA(1,1,1)
+
+```{r}
+model1.da=Arima(train.diff, order=c(1,1,1),method="ML")
+summary(model1.da)
+lmtest::coeftest(model1.da) 
+```
+Didapatkan nilai AIC sebesar 8086.58 dan seluruh parameter signifikan.
+
+## ARIMA(1,1,2)
+
+```{r}
+model2.da=Arima(train.diff, order=c(1,1,2),method="ML")
+summary(model2.da) 
+lmtest::coeftest(model2.da) 
+```
+Didapatkan nilai AIC sebesar 8088.02 dan hanya parameter ma1 signifikan.
+
+## ARIMA(1,1,3)
+```{r}
+model3.da=Arima(train.diff, order=c(1,1,3),method="ML")
+summary(model3.da)
+lmtest::coeftest(model3.da)
+```
+Didapatkan nilai AIC sebesar 8087.36 dan seluruh parameter signifikan.
+
+## ARIMA(2,1,2)
+```{r}
+model4.da=Arima(train.diff, order=c(2,1,2),method="ML")
+summary(model4.da)
+lmtest::coeftest(model4.da)
+```
+Didapatkan nilai AIC sebesar 8085.97 dan seluruh parameter signifikan.
+
+## ARIMA(2,1,3)
+```{r}
+model5.da=Arima(train.diff, order=c(2,1,3),method="ML")
+summary(model5.da)
+lmtest::coeftest(model5.da)
+```
+Didapatkan nilai AIC sebesar 8081.61 dan hanya parameter ma2 signifikan.
+
+## ARIMA(2,1,4)
+
+```{r}
+model6.da=Arima(train.diff, order=c(2,1,4),method="ML")
+summary(model6.da)  
+lmtest::coeftest(model6.da) 
+```
+Didapatkan nilai AIC sebesar 8090.07 dan seluruh parameter tudak signifikan.
+
+Berdasarkan pendugaan parameter di atas, nilai AIC terkecil 8085.97 dimiliki oleh model ARIMA(2,1,2) dan parameter model ARIMA(2,1,2) juga seluruhnya signifikan sehingga model yang dipilih adalah model ARIMA(2,1,2)
+
+# Overfitting
+Tahapan selanjutnya adalah overfitting dilakukan dengan menaikkan orde AR(p) dan MA(q) dari model ARIMA(2,1,2) untuk melihat apakah terdapat model lain yang lebih baik dari model saat ini. Kandidat model overfitting adalah ARIMA(3,1,2) dan ARIMA(2,1,3).
+
+## ARIMA(3,1,2)
+```{r}
+model5.1da=Arima(train.diff, order=c(3,1,2),method="ML")
+summary(model5.1da) 
+lmtest::coeftest(model5.1da)
+```
+Didapatkan nilai AIC sebesar 8087.73 dan hanya parameter ar3 tidak signifikan.
+
+## ARIMA(2,1,3)
+```{r}
+model5.2da=Arima(train.diff, order=c(2,1,3),method="ML")
+summary(model5.2da)
+lmtest::coeftest(model5.2da) 
+```
+Didapatkan nilai AIC sebesar 8081.61 dan hanya parameter ma2 yang signifikan.
+
+Setelah dilakukan overfitting pada model ARIMA(2,1,2) didapatkan hasil bahwa nilai AIC terkecil 8085.97 tetap dimiliki oleh model ARIMA(2,1,2) dengan seluruh parameternya signifikan sehingga model yang dipilih adalah model ARIMA(2,1,2)
+
+# Analisis Sisaan
+
+Model terbaik hasil identifikasi kemudian dicek asumsi sisaannya. Sisaan model ARIMA harus memenuhi asumsi normalitas, kebebasan sisaan, dan kehomogenan ragam. Diagnostik model dilakukan secara eksplorasi dan uji formal.
+
+## Eksplorasi Sisaan
+
+```{r}
+sisaan.da <- model4.da$residuals 
+#par(mfrow=c(2,2)) 
+qqnorm(sisaan.da) 
+qqline(sisaan.da, col = "blue", lwd = 2) 
+plot(c(1:length(sisaan.da)),sisaan.da) 
+acf(sisaan.da) 
+pacf(sisaan.da) 
+par(mfrow = c(1,1))
+```
+
+Berdasarkan plot kuantil-kuantil normal, secara eksplorasi ditunjukkan sisaan tidak menyebar normal ditandai dengan titik titik yang cenderung tidak mengikuti garis $45^{\circ}$ pada kedua ujungnya. Kemudian dapat dilihat juga lebar pita sisaan yang cenderung tidak sama menandakan bahwa sisaan memiliki ragam yang tidak homogen. Plot ACF dan PACF sisaan ARIMA(2,1,2) juga tidak signifikan pada 20 lag awal yang menandakan saling bebas. Kondisi ini akan diuji lebih lanjut dengan uji formal.
+
+## Uji Formal
+
+### 1. Uji kenormalanan sisaan
+```{r}
+ks.test(sisaan.da,"pnorm")  #tak tolak H0 > sisaan menyebar normal
+```
+
+Uji formal yang digunakan untuk normalitas adalah uji Kolmogorov-Smirnov (KS). 
+
+Hipotesis
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 2.2e-16 yang kurang dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa sisaan tidak menyebar normal. Hal ini sesuai dengan hasil eksplorasi menggunakan plot kuantil-kuantil normal.
+
+### 2. Uji kebebasan sisaan (tidak ada autokorelasi)
+```{r}
+Box.test(sisaan.da, type = "Ljung")  #tak tolak H0 > sisaan saling bebas
+```
+
+Uji formal untuk kebebasan sisaan menggunakan uji Ljung-Box. 
+
+Hipotesis
+
+$H_0$ : Sisaan saling bebas
+
+$H_1$ : Sisaan tidak tidak saling bebas
+
+Berdasarkan uji Ljung-Box tersebut, didapat *p-value* sebesar 0.9846 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan saling bebas. Hal ini sesuai dengan hasil eksplorasi menggunakan plot ACF dan PACF.
+
+### 3. Uji kehomogenan sisaan 
+```{r}
+Box.test((sisaan.da)^2, type = "Ljung")  #tak tolak H0 > sisaan homogen
+```
+
+Hipotesis
+
+$H_0$ : Ragam sisaan homogen
+
+$H_1$ : Ragam sisaan tidak homogen
+
+Berdasarkan uji Ljung-Box terhadap sisaan kuadrat tersebut, didapat *p-value* sebesar 0.01702 yang kurang dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa ragam sisaan tidak homogen sehingga perlu dilakukan penanganan.
+
+### 4. Nilai tengah sisaan sama dengan nol 
+```{r}
+t.test(sisaan.da, mu = 0, conf.level = 0.95)  #tak tolak h0 > nilai tengah sisaan sama dengan 0
+```
+
+Terakhir, dengan uji-t, akan dicek apakah nilai tengah sisaan sama dengan nol. 
+
+Hipotesis 
+
+$H_0$ : nilai tengah sisaan sama dengan 0
+
+$H_1$ : nilai tengah sisaan tidak sama dengan 0
+
+Berdasarkan uji-ttersebut, didapat *p-value* sebesar 0.52 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa nilai tengah sisaan sama dengan nol. 
+
+# Peramalan ARIMA
+Peramalan dilakukan menggunakan fungsi forecast() . Contoh peramalan berikut ini dilakukan untuk 61 hari ke depan.
+
+```{r}
+ramalan.da <- forecast::forecast(model4.da, h = 61) 
+ramalan.da
+```
+## Plot Ramalan
+```{r}
+data.ramalan.da <- ramalan.da$mean
+plot(ramalan.da)
+```
+Dapat dilihat bahwa ramalan ARIMA(2,1,2) cenderung stabil hingga akhir periode. Selanjutnya, dapat dicari nilai akurasi antara hasil ramalan dengan data uji sebagai berikut.
+
+## Transformasi Balik
+```{r}
+pt_1 <- train.ts.new[244] #nilai akhir data latih
+hasil.forc.Diff <- data.ramalan.da
+hasil <- diffinv(hasil.forc.Diff, differences = 1) + pt_1
+hasil1 <- abs(hasil)^(1/2)
+```
+
+## Akurasi
+Selanjutnya, dapat dicari nilai akurasi antara hasil ramalan yang sudah ditransformasi balik dengan data uji sebagai berikut.
+
+```{r}
+perbandingan<-matrix(data=c(head(test.ts, n=61),  hasil1[-1]),
+                     nrow = 61, ncol = 2)
+colnames(perbandingan)<-c("Aktual","Hasil Forecast")
+head(perbandingan)
+```
+
+```{r}
+accuracy(ts(hasil1[-1]), head(test.ts, n=61))
+```
+Diperoleh nilai MAPE sebesar 37.73789 yang menandakan bahwa hasil peramalan dari model ARIMA(2,1,2) masih kurang baik. 
+
+# Penanganan Ketidakhomogenan Ragam Sisaan
+
+## Uji Efek ARCH
+
+### ARCH(1)
+```{r}
+bydArchTest1 <- ArchTest(sisaan.da, lags=1, demean=TRUE)
+bydArchTest1
+```
+Didapatkan p-value sebesar 0.01862 kurang dari taraf nyata 5%.
+
+### ARCH(3)
+```{r}
+bydArchTest3 <- ArchTest(sisaan.da, lags=3, demean=TRUE)
+bydArchTest3
+```
+Didapatkan p-value sebesar 0.002679 kurang dari taraf nyata 5%
+
+### ARCH(5)
+```{r}
+bydArchTest5 <- ArchTest(sisaan.da, lags=5, demean=TRUE)
+bydArchTest5
+```
+Didapatkan p-value sebesar 0.01678 kurang dari taraf nyata 5%
+
+### ARCH(7)
+```{r}
+bydArchTest7 <- ArchTest(sisaan.da, lags=7, demean=TRUE)
+train.diff <- train.ts
+bydArchTest7
+```
+Didapatkan p-value sebesar 0.03391 kurang dari taraf nyata 5%
+
+### ARCH(10)
+```{r}
+bydArchTest10 <- ArchTest(sisaan.da, lags=10, demean=TRUE)
+bydArchTest10
+```
+Didapatkan p-value sebesar 0.02361 kurang dari taraf nyata 5%
+`
+### ARCH(12)
+```{r}
+bydArchTest12 <- ArchTest(sisaan.da, lags=12, demean=TRUE)
+bydArchTest12
+```
+Pada lag ke-12, didapatkan p-value sebesar 0.03951 kurang dari taraf nyata 5%. Hal ini menunjukkan bahwa hingga lag ke-12 masih signifikan sehingga akan dicoba dengan GARCH.
+
+## Uji Efek GARCH
+
+### GARCH(0,1)
+```{r}
+garch11 <- rugarch::ugarchspec(mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                     variance.model = list(model = "sGARCH",garchOrder=c(0,1)))
+garch11 <- rugarch::ugarchfit(data = train.diff, spec = garch11)
+garch11
+```
+Didapatkan nilai AIC sebesar 15.150 dengan beberapa parameter yang tidak signifikan (p-value < 0.05) dan semua ARCH LM Test signifikan (p-value > 0.05)
+
+### GARCH(0,2)
+```{r}
+garch11 <- rugarch::ugarchspec(mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                     variance.model = list(model = "sGARCH",garchOrder=c(0,2)))
+garch11 <- rugarch::ugarchfit(data = train.diff, spec = garch11)
+garch11
+```
+Didapatkan nilai AIC sebesar 15.108 dengan beberapa parameter yang tidak signifikan (p-value < 0.05) dan semua ARCH LM Test signifikan (p-value > 0.05)
+
+### GARCH(0,3)
+```{r}
+garch11 <- rugarch::ugarchspec(mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                     variance.model = list(model = "sGARCH",garchOrder=c(0,3)))
+garch11 <- rugarch::ugarchfit(data = train.diff, spec = garch11)
+garch11
+```
+Didapatkan nilai AIC sebesar 15.125 dengan beberapa parameter yang tidak signifikan (p-value < 0.05) dan semua ARCH LM Test signifikan (p-value > 0.05)
+
+### GARCH(1,1)
+```{r}
+garch11 <- rugarch::ugarchspec(mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                     variance.model = list(model = "sGARCH",garchOrder=c(1,1)))
+garch11 <- rugarch::ugarchfit(data = train.diff, spec = garch11)
+garch11
+```
+
+```{r}
+res1<-garch11@fit$residuals
+res1.ts<-ts(res1)
+plot.ts(res1.ts)
+```
+Didapatkan nilai AIC sebesar 14.918 dengan semua parameter signifikan (p-value < 0.05) dan semua ARCH LM Test signifikan (p-value > 0.05)
+
+### GARCH(1,2)
+```{r}
+garch11 <- rugarch::ugarchspec(mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                     variance.model = list(model = "sGARCH",garchOrder=c(1,2)))
+garch11 <- rugarch::ugarchfit(data = train.diff, spec = garch11)
+garch11
+```
+Didapatkan nilai AIC sebesar 14.798 dengan beberapa parameter yang tidak signifikan (p-value < 0.05) dan semua ARCH LM Test signifikan (p-value > 0.05)
+
+### GARCH(1,3)
+```{r}
+garch11 <- rugarch::ugarchspec(mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                     variance.model = list(model = "sGARCH",garchOrder=c(1,3)))
+garch11 <- rugarch::ugarchfit(data = train.diff, spec = garch11)
+garch11
+```
+Didapatkan nilai AIC sebesar 15.067 dengan beberapa parameter yang tidak signifikan (p-value < 0.05) dan semua ARCH LM Test signifikan (p-value > 0.05)
+
+Setelah dilakukan uji efek GARCH, didapatkan nilai AIC terkecil 14.918 yang dimiliki oleh model GARCH(1,1) dengan nilai p-value yang lebih besar dari taraf nyata 5% pada ARCH LM Test dan seluruh parameter model GARCH(1,1) signifikan sehingga model yang dipilih adalah model GARCH(1,1).
+
+
+# Peramalan ARIMA-GARCH
+Peramalan dilakukan untuk 61 periode ke depan.
+
+## Plot Peramalan Pada Model
+```{r}
+forc<- ugarchforecast(fitORspec = garch11, n.ahead = 61, n.roll = 0)
+plot(forc, which= 1)
+```
+## Akurasi
+
+Selanjutnya, dapat dicari nilai akurasi antara hasil ramalan yang sudah ditransformasi balik dengan data uji sebagai berikut.
+```{r}
+pt_1 <- train.ts.new[244] #nilai akhlir data latih
+hasil.forc.Diff <- forc@forecast$seriesFor[,1]
+hasilgarch <- diffinv(hasil.forc.Diff, differences = 1) + pt_1
+hasilakhir <- abs(hasilgarch)^(1/2) 
+perbandingan <- data.frame("Aktual"= test.ts,
+                           "Ramalan" = hasilakhir[-1])
+head(perbandingan,10)
+```
+
+## Nilai MAPE
+```{r}
+Periode  <-c(test.ts[245:305]) 
+dataframe <- data.frame(Periode, perbandingan) 
+T <- nrow(dataframe) 
+MAPE <- 1/T*sum(abs((dataframe$Aktual-dataframe$Ramalan)/dataframe$Aktual)*100)
+MAPE
+```
+Diperoleh nilai MAPE sebesar 9.316642 yang menandakan bahwa hasil peramalan dari model ARIMA(2,1,2)-GARCH(1,1) sudah sangat baik.
+
+# Pemodelan
+
+ARIMA(2,1,2)-GARCH(1,1)
+```{r}
+coef(garch11)
+```
+## Model Mean ARIMA (2,1,2)
+$$
+Y_t = -0.8099Y_{t-1}-0.1832Y_{t-2}+ e_t -0.0151e_{t-1} -0.0089e_{t-2}
+$$
+
+## Model Varian GARCH (1,1)
+$$
+σ^2 = 2.5828×10^4+ 0.19444e^2_{t-1} + 0.4801σ^2_{t-1} + 1.478×10^-9σ^2_{t-2} + 6.003×10^-15σ^2_{t-3}
+$$
+
+# Kesimpulan
+Peramalan data harga saham PT Unilever Indonesia Tbk untuk 61 periode (pekan) ke depan dengan menggunakan model ARIMA(2,1,2) tidak dapat mengatasi adanya efek heteroskedastisitas dengan nilai MAPE sebesar 37,73%. Nilai MAPE tersebut menunjukkan bahwa peramalan masih belum cukup baik. Efek heteroskedastisitas tersebut ditangani dengan model ARCH-GARCH.Lag model ARCH masih signifikan hingga lag 12 sehingga selanjutnya ditangani dengan model GARCH dan dibandingkan nilai AIC dan signifikansi parameter setiap model. Didapatkan model GARCH(1,1) yang memiliki nilai AIC terkecil dan semua parameter signifikan. Model ARIMA(2,1,2)-GARCH(1,1) sebagai model terbaik untuk meramalkan harga saham PT Unilever Indonesia Tbk dengan nilai MAPE sebesar 9,31%.
